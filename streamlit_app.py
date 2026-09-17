@@ -1,151 +1,122 @@
+# app.py
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+from crewai import Agent, Task, Crew, Process
+from crewai_tools import SerperDevTool, WebsiteSearchTool, FileReadTool, CodeInterpreterTool
+from langchain_openai import ChatOpenAI
+import os
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# ====================== إعداد الصفحة ======================
+st.set_page_config(page_title="وكيل الذكاء الاصطناعي", page_icon="🤖", layout="wide")
+st.title("🤖 وكيل الذكاء الاصطناعي المتكامل")
+st.caption("Multi-Agent System - جاهز للاستخدام")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# ====================== الـ Sidebar ======================
+with st.sidebar:
+    st.header("الإعدادات")
+        api_key = st.text_input("OpenAI API Key", type="password")
+            model_name = st.selectbox("الموديل", ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"])
+                
+                    if api_key:
+                            os.environ["OPENAI_API_KEY"] = api_key
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+                            # ====================== بناء الوكلاء ======================
+                            @st.cache_resource
+                            def create_crew(api_key, model_name):
+                                if not api_key:
+                                        return None
+                                            
+                                                llm = ChatOpenAI(model=model_name, temperature=0.2)
+                                                    
+                                                        search_tool = SerperDevTool() if os.getenv("SERPER_API_KEY") else None
+                                                            tools = [WebsiteSearchTool(), FileReadTool(), CodeInterpreterTool()]
+                                                                if search_tool:
+                                                                        tools.insert(0, search_tool)
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+                                                                            manager = Agent(
+                                                                                    role="المدير",
+                                                                                            goal="توزيع المهام وتحقيق أفضل نتيجة ممكنة",
+                                                                                                    backstory="مدير محترف ومنظم جدًا",
+                                                                                                            allow_delegation=True,
+                                                                                                                    llm=llm,
+                                                                                                                            verbose=False
+                                                                                                                                )
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+                                                                                                                                    researcher = Agent(
+                                                                                                                                            role="باحث",
+                                                                                                                                                    goal="البحث عن معلومات دقيقة من الإنترنت",
+                                                                                                                                                            backstory="باحث خبير",
+                                                                                                                                                                    tools=tools,
+                                                                                                                                                                            llm=llm,
+                                                                                                                                                                                    verbose=False
+                                                                                                                                                                                        )
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+                                                                                                                                                                                            coder = Agent(
+                                                                                                                                                                                                    role="مطور",
+                                                                                                                                                                                                            goal="كتابة وتعديل الكود",
+                                                                                                                                                                                                                    backstory="مطور سينيور",
+                                                                                                                                                                                                                            tools=tools,
+                                                                                                                                                                                                                                    llm=llm,
+                                                                                                                                                                                                                                            verbose=False
+                                                                                                                                                                                                                                                )
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+                                                                                                                                                                                                                                                    analyst = Agent(
+                                                                                                                                                                                                                                                            role="محلل",
+                                                                                                                                                                                                                                                                    goal="تحليل المعلومات واستخراج الرؤى",
+                                                                                                                                                                                                                                                                            backstory="محلل بيانات محترف",
+                                                                                                                                                                                                                                                                                    llm=llm,
+                                                                                                                                                                                                                                                                                            verbose=False
+                                                                                                                                                                                                                                                                                                )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+                                                                                                                                                                                                                                                                                                    writer = Agent(
+                                                                                                                                                                                                                                                                                                            role="كاتب",
+                                                                                                                                                                                                                                                                                                                    goal="كتابة محتوى احترافي وواضح",
+                                                                                                                                                                                                                                                                                                                            backstory="كاتب محترف",
+                                                                                                                                                                                                                                                                                                                                    llm=llm,
+                                                                                                                                                                                                                                                                                                                                            verbose=False
+                                                                                                                                                                                                                                                                                                                                                )
 
-    return gdp_df
+                                                                                                                                                                                                                                                                                                                                                    return manager, researcher, coder, analyst, writer, llm
 
-gdp_df = get_gdp_data()
+                                                                                                                                                                                                                                                                                                                                                    # ====================== الواجهة ======================
+                                                                                                                                                                                                                                                                                                                                                    if not api_key:
+                                                                                                                                                                                                                                                                                                                                                        st.warning("حط الـ OpenAI API Key في الـ Sidebar عشان تشتغل")
+                                                                                                                                                                                                                                                                                                                                                            st.stop()
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+                                                                                                                                                                                                                                                                                                                                                            manager, researcher, coder, analyst, writer, llm = create_crew(api_key, model_name)
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+                                                                                                                                                                                                                                                                                                                                                            # شات
+                                                                                                                                                                                                                                                                                                                                                            if "messages" not in st.session_state:
+                                                                                                                                                                                                                                                                                                                                                                st.session_state.messages = []
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+                                                                                                                                                                                                                                                                                                                                                                for message in st.session_state.messages:
+                                                                                                                                                                                                                                                                                                                                                                    with st.chat_message(message["role"]):
+                                                                                                                                                                                                                                                                                                                                                                            st.markdown(message["content"])
 
-# Add some spacing
-''
-''
+                                                                                                                                                                                                                                                                                                                                                                            if prompt := st.chat_input("اكتب المهمة اللي عايز الوكيل ينفذها..."):
+                                                                                                                                                                                                                                                                                                                                                                                st.session_state.messages.append({"role": "user", "content": prompt})
+                                                                                                                                                                                                                                                                                                                                                                                    with st.chat_message("user"):
+                                                                                                                                                                                                                                                                                                                                                                                            st.markdown(prompt)
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+                                                                                                                                                                                                                                                                                                                                                                                                with st.chat_message("assistant"):
+                                                                                                                                                                                                                                                                                                                                                                                                        with st.spinner("الوكلاء بيشتغلوا دلوقتي..."):
+                                                                                                                                                                                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                                                                                                                                                # إنشاء المهام حسب طلب المستخدم
+                                                                                                                                                                                                                                                                                                                                                                                                                                            task = Task(
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            description=prompt,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                            expected_output="إجابة واضحة وكاملة بالعربية",
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            agent=manager
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        )
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    crew = Crew(
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    agents=[manager, researcher, coder, analyst, writer],
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    tasks=[task],
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    process=Process.hierarchical,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    manager_llm=llm,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    verbose=False
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                )
 
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            result = crew.kickoff()
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        response = str(result)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                st.markdown(response)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            st.session_state.messages.append({"role": "assistant", "content": response})
